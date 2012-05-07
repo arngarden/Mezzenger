@@ -21,6 +21,7 @@ import signal
 import zmq
 import message
 
+DEFAULT_SERVER = '127.0.0.1'
 DEFAULT_PUB_PORT = '7201'
 DEFAULT_RECV_PORT = '7202'
 MSG_CHECK_INTERVAL = 10
@@ -43,7 +44,7 @@ class MezzengerServer:
         self.debug = debug
         self.pubPort = pubPort or DEFAULT_PUB_PORT
         self.recvPort = recvPort or DEFAULT_RECV_PORT
-        self.bindAddress = bindAddress or '127.0.0.1'
+        self.bindAddress = bindAddress or DEFAULT_SERVER
         self.messageRecvSocket = None
         self.messageSocketPub = None
         try:
@@ -180,14 +181,14 @@ class MezzengerServer:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Mezzenger server')
-    parser.add_argument('--bind', action='store', dest='bindAddress', help='Address to bind server on')
-    parser.add_argument('--pubPort', action='store', dest='pubPort', type=int, help='Port for outgoing messages')
-    parser.add_argument('--recvPort', action='store', dest='recvPort', type=int, help='Port for incoming messages')
+    parser.add_argument('--bind', action='store', dest='bindAddress', help='Address to bind server on. Default is 127.0.0.1.')
+    parser.add_argument('--pubPort', action='store', dest='pubPort', type=int, help='Port for outgoing messages. Default is 7201.')
+    parser.add_argument('--recvPort', action='store', dest='recvPort', type=int, help='Port for incoming messages. Default is 7202.')
     #parser.add_argument('--msgQueueMax', action='store', dest='msgQueueMax', type=int,
     #                    help='Max length of saved messages queue')
     parser.add_argument('--persistFile', action='store', dest='persistFile',
-                        help='Path to file where to save persistant messages')
-    parser.add_argument('--debug', action='store_true', dest='debug', default=False, help='Print debug messages')
+                        help='Path to file where to save persistant messages. Default is None, (no persist file is used).')
+    parser.add_argument('--debug', action='store_true', dest='debug', default=False, help='Print debug messages. Default is False.')
     args = parser.parse_args()
     MezzengerServer(bindAddress=args.bindAddress, recvPort=args.recvPort, pubPort=args.pubPort,
-                persistFile=args.persistFile, debug=args.debug)
+                    persistFile=args.persistFile, debug=args.debug)

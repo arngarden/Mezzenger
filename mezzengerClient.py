@@ -14,10 +14,10 @@ import sys
 import threading
 import zmq
 import message
-#from message import Message
 
-RECV_SERVER = '127.0.0.1:7201'
-SEND_SERVER = '127.0.0.1:7202'
+SERVER = '127.0.0.1'
+SUB_PORT = 7201
+SEND_PORT = 7202
 
 DEFAULT_SEND_TIMEOUT = 2000
 DEFAULT_CONNECTION_RETRIES = 5
@@ -26,12 +26,13 @@ class MezzengerException(Exception):
     pass
 
 class Mezzenger(threading.Thread):
-    def __init__(self, recvServer=None, sendServer=None, sendTimeout=None,
+    def __init__(self, serverAddress=None, sendPort=None, subPort=None, sendTimeout=None,
                  connectionRetries=None, autoStart=True, verbose=True):
         """ Init Mezzenger
         Args:
-        - recvServer: Server for receiving messages
-        - sendServer: Server for sending messages
+        - serverAddress: Server for receiving messages
+        - sendPort: Port for outgoing messages
+        - subPort: Port for incoming messages
         - sendTimeout: Client tries sending message for connectionRetries * sendTimeout seconds
         - connectionRetries: Client tries sending message for connectionRetries * sendTimeout seconds
         - autoStart: If True, thread is started at end of init
@@ -39,15 +40,16 @@ class Mezzenger(threading.Thread):
 
         """
         threading.Thread.__init__(self)
-        self.recvServer = recvServer or RECV_SERVER
-        self.sendServer = sendServer or SEND_SERVER
-        self.sendTimeout = sendTimeout or DEFAULT_SEND_TIMEOUT
+        self.serverAddress = serverAddress or SERVER
+        self.sendPort = sendPort or SEND_PORT
+        self.subPort = subPort or SUB_PORT
+        self.sendTimeout = sendTimeout * 1000 or DEFAULT_SEND_TIMEOUT
         self.connectionRetries = connectionRetries or DEFAULT_CONNECTION_RETRIES
         self.verbose = verbose
         self.context = zmq.Context()
-        self.recvPoller = zmq.Poller()
+        self.subPoller = zmq.Poller()
         self.msgPoller = zmq.Poller()
-        self.msgRecvSocket = None
+        self.msgSubSocket = None
         self.msgSendSocket = None
         self.connect()
         self._stop = threading.Event()
@@ -61,7 +63,7 @@ class Mezzenger(threading.Thread):
         Send ping to server to make sure connection is established.
 
         """
-        self._reconnectRecvSocket()
+        self._reconnectSubSocket()
         self._reconnectSendSocket()
         ret = self._send('ping', 'ping')
         if not ret == 'OK':
@@ -72,28 +74,28 @@ class Mezzenger(threading.Thread):
 
         """
         if self.verbose:
-            print 'Connecting send socket: %s' % self.sendServer
+            print 'Connecting send socket: %s:%s' % (self.serverAddress, self.sendPort)
         if self.msgSendSocket:
-            self.recvPoller.unregister(self.msgSendSocket)
-            self.msgSendSocket.setsockopt(zmq.LINGER, 0) #????
+            self.subPoller.unregister(self.msgSendSocket)
+            self.msgSendSocket.setsockopt(zmq.LINGER, 0)
             self.msgSendSocket.close()
         self.msgSendSocket = self.context.socket(zmq.REQ)
-        self.msgSendSocket.connect('tcp://%s' % self.sendServer)
+        self.msgSendSocket.connect('tcp://%s:%s' % (self.serverAddress, self.sendPort))
 
-        self.recvPoller.register(self.msgSendSocket, zmq.POLLIN)
+        self.subPoller.register(self.msgSendSocket, zmq.POLLIN)
 
-    def _reconnectRecvSocket(self):
-        """ Connect to recv-socket.
+    def _reconnectSubSocket(self):
+        """ Connect to sub-socket.
 
         """
         if self.verbose:
-            print 'Connecting recv socket: %s' % self.recvServer
-        if self.msgRecvSocket:
-            self.msgPoller.unregister(self.msgRecvSocket)
-            self.msgRecvSocket.close()
-        self.msgRecvSocket = self.context.socket(zmq.SUB)
-        self.msgRecvSocket.connect('tcp://%s' % self.recvServer)
-        self.msgPoller.register(self.msgRecvSocket, zmq.POLLIN)
+            print 'Connecting sub socket: %s:%s' % (self.serverAddress, self.subPort)
+        if self.msgSubSocket:
+            self.msgPoller.unregister(self.msgSubSocket)
+            self.msgSubSocket.close()
+        self.msgSubSocket = self.context.socket(zmq.SUB)
+        self.msgSubSocket.connect('tcp://%s:%s' % (self.serverAddress, self.subPort))
+        self.msgPoller.register(self.msgSubSocket, zmq.POLLIN)
 
     def _closeSockets(self):
         """ Close sockets.
@@ -101,22 +103,24 @@ class Mezzenger(threading.Thread):
         """
         self.msgSendSocket.setsockopt(zmq.LINGER, 0)
         self.msgSendSocket.close()
-        self.msgRecvSocket.close()
+        self.msgSubSocket.close()
         
     def subscribe(self, msgName, callback):
         """ Start subscribing to msgName.
 
         """
+        if self.stopped():
+            raise MezzengerException('Cannot subscribe to message, client is not running')
         if not msgName in self.msgMap:
             self.msgMap[msgName] = callback
-            self.msgRecvSocket.setsockopt(zmq.SUBSCRIBE, msgName)
+            self.msgSubSocket.setsockopt(zmq.SUBSCRIBE, msgName)
 
     def unsubscribe(self, msgName):
         """ Remove subscription of msgName, raise exception if we do not subscribe to msgName.
         
         """
         if msgName in self.msgMap:
-            self.msgRecvSocket.setsockopt(zmq.UNSUBSCRIBE, msgName)
+            self.msgSubSocket.setsockopt(zmq.UNSUBSCRIBE, msgName)
             _ = self.msgMap.pop(msgName)
         else:
             raise MezzengerException('You do not subscribe to msg: %s' % msgName)
@@ -130,7 +134,7 @@ class Mezzenger(threading.Thread):
         if self.verbose:
             print 'Sending message: %s' % str(msg)
         self.msgSendSocket.send(msg.serialize())
-        socks = dict(self.recvPoller.poll(self.sendTimeout))
+        socks = dict(self.subPoller.poll(self.sendTimeout))
         if socks.get(self.msgSendSocket) == zmq.POLLIN:
             return self.msgSendSocket.recv()
         else:
@@ -138,7 +142,7 @@ class Mezzenger(threading.Thread):
                 print 'Timed out waiting for reply from server'
             for i in xrange(self.connectionRetries):
                 self._reconnectSendSocket()
-                socks = dict(self.recvPoller.poll(self.sendTimeout))
+                socks = dict(self.subPoller.poll(self.sendTimeout))
                 if socks.get(self.msgSendSocket) == zmq.POLLIN:
                     return self.msgSendSocket.recv()
             self._reconnectSendSocket()
@@ -166,8 +170,8 @@ class Mezzenger(threading.Thread):
         """
         while not self.stopped():
             socks = dict(self.msgPoller.poll(2000))
-            if socks.get(self.msgRecvSocket) == zmq.POLLIN:
-                msg = self.msgRecvSocket.recv()
+            if socks.get(self.msgSubSocket) == zmq.POLLIN:
+                msg = self.msgSubSocket.recv()
                 try:
                     msg = message.parse(msg)
                 except Exception, e:
