@@ -7,9 +7,9 @@ It supports sending messages, (really any kind of Python-object that can be pick
 
 ## Quick start
 ### Server
-'''
+```
 python mezzengerServer.py --bind='127.0.0.1'
-'''
+```
 Start a mezzengerServer that binds on IP 127.0.0.1.
 
 ### Client 1 (publisher)
