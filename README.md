@@ -68,7 +68,7 @@ The parameters bind, pubPort and recvPort are used for determining which address
 Messages that are waiting to be acknowledged by a subscriber are by default only saved in memory. If we would like these messages to also be persisted to a file we can set a file name in the parameter persistFile.
 
 ## The client - mezzengerClient.py
-The client is used for sending and subscribing to messages. The Mezzenger-class has the following arguments:
+The client is used for sending and subscribing to messages. The Mezzenger-class takes the following arguments:
 ```
 serverAddress - Address that the server is bound to. Default is 127.0.0.1.
 sendPort - Port for outgoing messages. Default is 7202.
@@ -80,10 +80,10 @@ verbose - If True, status information is printed.
 ```
 You send messages by calling the sendEvent method:
 ```python
-def sendMessage(self, msgName, msg, ack=0)
+def sendMessage(self, msgName, payload, ack=0)
 ```
 'msgName' is the name of the message that is used by subscribers to filter it.
-'msg' is the message payload.
+'payload' is the message payload.
 'ack' denotes whether the server should demand an acknowledgement from a subscriber that the message has been received.
 
 For subscribing to a message you use the subscribe method:
@@ -119,11 +119,11 @@ mc.sendMessage('greeting', 'Hello Gustav!')
 ```
 This message reaches all subscribers that are currently subscribing to messages with the name 'greeting'. If there are no such subscribers, the message is simply discarded by default.
 
-But if we are sending more important messages we might want to make sure that it reaches a subscriber. We can then set the ack-argument to 1, for example:
+If we are sending more important messages we might want to make sure that it reaches a subscriber. We can then set the ack-argument to 1, for example:
 ```python
 mc.sendMessage('greeting', 'Hello Gustav!', ack=1)
 ```
-When ack=1 the server will keep resending the message until at least one subscriber has acknowledged it. Note that the ack is sent automatically from the client after the callback has returned.
+When ack=1 the server will keep resending the message until at least one subscriber has acknowledged it. The ack is sent automatically from the client after the callback has returned.
 
 By default the server keeps unacknowledged messages in memory so if the server crashes, the messages are lost. For extra protection you can give a name to a file where the unacknowledged messages should be persisted. This is done by settings the persistFile-parameter to the name of the file when starting the server.
 
