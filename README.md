@@ -4,6 +4,9 @@
 Mezzenger is a simple messaging system written in Python using ZeroMQ as backend.
 It supports sending messages, (really any kind of Python-object that can be pickled), from one or more publishers to one or more subscribers through a server.
 
+## Requirements
+ZeroMQ - www.zeromq.org/intro:get-the-software
+Python binding for ZeroMQ - www.zeromq.org/bindings:python
 
 ## Quick start
 ### Server
@@ -23,6 +26,7 @@ while True:
   time.sleep(3)
 ```
 Create mezzenger client that connects to the server on 127.0.0.1. Since this client only sends messages we can set autoStart=False to prevent it from starting the thread that listens to new messages.
+
 The client then starts sending random greetings to every other client that listens to the channel 'greetings'.
 
 ### Client 2 (subscriber)
@@ -40,11 +44,12 @@ Start mezzengerClient that subscribes to all 'greetings' and prints the greeting
 
 ## The server - mezzengerServer.py
 All messages are sent through the MezzengerServer which of course needs to run on a server that is accessible to all clients.
+
 The server is easily started with 'python mezzengerServer.py'. The following command line arguments are available:
 ```
 usage: mezzengerServer.py [-h] [--bind BINDADDRESS] [--pubPort PUBPORT]
                           [--recvPort RECVPORT] [--persistFile PERSISTFILE]
-                          [--debug]
+                          [--verbose]
 
 Mezzenger server
 
@@ -56,9 +61,10 @@ optional arguments:
   --persistFile PERSISTFILE
                         Path to file where to save persistant messages.
                         Default is None, (no persist file is used).
-  --debug               Print debug messages. Default is False.
+  --verbose             Print verbose messages. Default is False.
 ```
 The parameters bind, pubPort and recvPort are used for determining which address and ports the server uses for receiving and sending messages.
+
 Messages that are waiting to be acknowledged by a subscriber are by default only saved in memory. If we would like these messages to also be persisted to a file we can set a file name in the parameter persistFile.
 
 ## The client - mezzengerClient.py
@@ -112,12 +118,15 @@ mc = mezzengerClient.Mezzenger()
 mc.sendMessage('greeting', 'Hello Gustav!')
 ```
 This message reaches all subscribers that are currently subscribing to messages with the name 'greeting'. If there are no such subscribers, the message is simply discarded by default.
+
 But if we are sending more important messages we might want to make sure that it reaches a subscriber. We can then set the ack-argument to 1, for example:
 ```python
 mc.sendMessage('greeting', 'Hello Gustav!', ack=1)
 ```
 When ack=1 the server will keep resending the message until at least one subscriber has acknowledged it. Note that the ack is sent automatically from the client after the callback has returned.
+
 By default the server keeps unacknowledged messages in memory so if the server crashes, the messages are lost. For extra protection you can give a name to a file where the unacknowledged messages should be persisted. This is done by settings the persistFile-parameter to the name of the file when starting the server.
+
 Note that there is currently no way of limiting the number of saved messages so it is possible to fill all available memory if you are not careful.
 
 

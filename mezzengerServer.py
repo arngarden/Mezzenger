@@ -22,8 +22,8 @@ import zmq
 import message
 
 DEFAULT_SERVER = '127.0.0.1'
-DEFAULT_PUB_PORT = '7201'
-DEFAULT_RECV_PORT = '7202'
+DEFAULT_PUB_PORT = 7201
+DEFAULT_RECV_PORT = 7202
 MSG_CHECK_INTERVAL = 10
 
 class MezzengerServerException(Exception):
@@ -31,17 +31,17 @@ class MezzengerServerException(Exception):
 
 class MezzengerServer:
     def __init__(self, bindAddress=None, pubPort=None, recvPort=None,
-                 persistFile=None, debug=False):
+                 persistFile=None, verbose=False):
         """ Init server.
         Args:
         - bindAddress: Address to bind to
         - pubPort: Port for sending messages
         - recvPort: Port for receiving messages
         - persistFile: File for saving messages that are waiting for ack
-        - debug: Print debug info if True
+        - verbose: Print verbose info if True
         
         """
-        self.debug = debug
+        self.verbose = verbose
         self.pubPort = pubPort or DEFAULT_PUB_PORT
         self.recvPort = recvPort or DEFAULT_RECV_PORT
         self.bindAddress = bindAddress or DEFAULT_SERVER
@@ -86,13 +86,13 @@ class MezzengerServer:
         self.messageRecvSocket = self.context.socket(zmq.ROUTER)
         self.messageRecvSocket.bind('tcp://%s:%s' % (self.bindAddress, self.recvPort))
         self.poller.register(self.messageRecvSocket, zmq.POLLIN)
-        if self.debug:
+        if self.verbose:
             print 'Bound recv-socket at tcp://%s:%s' % (self.bindAddress, self.recvPort)
         if self.messageSocketPub:
             self.messageSocketPub.close()
         self.messageSocketPub = self.context.socket(zmq.PUB)
         self.messageSocketPub.bind('tcp://%s:%s' % (self.bindAddress, self.pubPort))
-        if self.debug:
+        if self.verbose:
             print 'Bound pub-socket at tcp://%s:%s' % (self.bindAddress, self.pubPort)
 
     def _closeSockets(self):
@@ -118,24 +118,24 @@ class MezzengerServer:
                     msg = self.messageRecvSocket.recv()            
                     try:
                         msg = message.parse(msg)
-                        if self.debug:
+                        if self.verbose:
                             print 'Got message: %s' % str(msg)
                     except:
-                        print 'ERROR: Could not parse message: %s' % msg
+                        print 'ERROR: Could not parse message: %s' % str(msg)
                         continue
                     if msg['name'] == 'ack':
-                        # message is ack for previous sent message
+                        # message is ack for previous sent message, checksum for ack:ed message is in payload
                         try:
-                            if self.debug:
-                                print 'Got ack for message: %s' % msg['msg']
-                            self.msgCollection.pop(msg['msg'])
+                            if self.verbose:
+                                print 'Got ack for message: %s' % msg['payload']
+                            self.msgCollection.pop(msg['payload'])
                             if self.persistFile:
                                 self._flushSavedMessages()
                         except KeyError:
                             pass
                     if int(msg['ack']) > 0:
                         # save message and make sure server receive ack
-                        if self.debug:
+                        if self.verbose:
                             print 'Delivery of message with ack: %s' % msg['checksum']
                         self.msgCollection[msg['checksum']] = (time.time(), msg)
                         if self.persistFile:
@@ -158,7 +158,7 @@ class MezzengerServer:
         while not self.stopped():
             for msgID, (lastChecked, msg) in self.msgCollection.iteritems():
                 if lastChecked + MSG_CHECK_INTERVAL <= time.time():
-                    if self.debug:
+                    if self.verbose:
                         print 'Sending un-acked message again: %s' % msg['checksum']
                     self.messageSocketPub.send(msg.serialize())
                     self.msgCollection[msgID] = (time.time(), msg)
@@ -188,7 +188,7 @@ if __name__ == '__main__':
     #                    help='Max length of saved messages queue')
     parser.add_argument('--persistFile', action='store', dest='persistFile',
                         help='Path to file where to save persistant messages. Default is None, (no persist file is used).')
-    parser.add_argument('--debug', action='store_true', dest='debug', default=False, help='Print debug messages. Default is False.')
+    parser.add_argument('--verbose', action='store_true', dest='verbose', default=False, help='Print verbose messages. Default is False.')
     args = parser.parse_args()
     MezzengerServer(bindAddress=args.bindAddress, recvPort=args.recvPort, pubPort=args.pubPort,
-                    persistFile=args.persistFile, debug=args.debug)
+                    persistFile=args.persistFile, verbose=args.verbose)

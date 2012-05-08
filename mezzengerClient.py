@@ -19,15 +19,15 @@ SERVER = '127.0.0.1'
 SUB_PORT = 7201
 SEND_PORT = 7202
 
-DEFAULT_SEND_TIMEOUT = 2000
+DEFAULT_SEND_TIMEOUT = 2
 DEFAULT_CONNECTION_RETRIES = 5
 
 class MezzengerException(Exception):
     pass
 
 class Mezzenger(threading.Thread):
-    def __init__(self, serverAddress=None, sendPort=None, subPort=None, sendTimeout=None,
-                 connectionRetries=None, autoStart=True, verbose=True):
+    def __init__(self, serverAddress=SERVER, sendPort=SEND_PORT, subPort=SUB_PORT, sendTimeout=DEFAULT_SEND_TIMEOUT,
+                 connectionRetries=DEFAULT_CONNECTION_RETRIES, autoStart=True, verbose=False):
         """ Init Mezzenger
         Args:
         - serverAddress: Server for receiving messages
@@ -40,11 +40,11 @@ class Mezzenger(threading.Thread):
 
         """
         threading.Thread.__init__(self)
-        self.serverAddress = serverAddress or SERVER
-        self.sendPort = sendPort or SEND_PORT
-        self.subPort = subPort or SUB_PORT
-        self.sendTimeout = sendTimeout * 1000 or DEFAULT_SEND_TIMEOUT
-        self.connectionRetries = connectionRetries or DEFAULT_CONNECTION_RETRIES
+        self.serverAddress = serverAddress
+        self.sendPort = sendPort
+        self.subPort = subPort
+        self.sendTimeout = sendTimeout * 1000
+        self.connectionRetries = connectionRetries
         self.verbose = verbose
         self.context = zmq.Context()
         self.subPoller = zmq.Poller()
@@ -112,8 +112,8 @@ class Mezzenger(threading.Thread):
         if self.stopped():
             raise MezzengerException('Cannot subscribe to message, client is not running')
         if not msgName in self.msgMap:
-            self.msgMap[msgName] = callback
             self.msgSubSocket.setsockopt(zmq.SUBSCRIBE, msgName)
+        self.msgMap[msgName] = callback
 
     def unsubscribe(self, msgName):
         """ Remove subscription of msgName, raise exception if we do not subscribe to msgName.
@@ -125,12 +125,12 @@ class Mezzenger(threading.Thread):
         else:
             raise MezzengerException('You do not subscribe to msg: %s' % msgName)
 
-    def _send(self, msgName, msg, ack=0):
+    def _send(self, msgName, payload, ack=0):
         """ Send message to server, returning return-message from server.
         If message can not be sent, return False
         
         """
-        msg = message.Message(msgName, msg=msg, ack=ack)
+        msg = message.Message(msgName, payload=payload, ack=ack)
         if self.verbose:
             print 'Sending message: %s' % str(msg)
         self.msgSendSocket.send(msg.serialize())
@@ -151,15 +151,15 @@ class Mezzenger(threading.Thread):
             return False
 
     # TODO: override timeout
-    def sendMessage(self, msgName, msg, ack=0):
+    def sendMessage(self, msgName, payload, ack=0):
         """ Send message to server.
         Args:
         - msgName: Name of message (= name of subscription channel)
-        - msg: Message body
+        - payload: Message payload
         - ack: If > 0, server will make sure at least one client receives message
 
         """
-        ret = self._send(msgName, msg, ack)
+        ret = self._send(msgName, payload, ack)
         if not ret:
             raise MezzengerException('Could not send message to server')
         
@@ -179,7 +179,7 @@ class Mezzenger(threading.Thread):
                 if msg['name'] in self.msgMap:
                     if self.verbose:
                         print 'Got message: %s' % str(msg)
-                    self.msgMap[msg['name']](msg['msg'])
+                    self.msgMap[msg['name']](msg['payload'], msg)
                     if msg['ack'] > 0:
                         # send back ack to server
                         if self.verbose:
