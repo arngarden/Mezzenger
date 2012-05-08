@@ -6,6 +6,7 @@ It supports sending messages, (really any kind of Python-object that can be pick
 
 ## Requirements
 ZeroMQ - www.zeromq.org/intro:get-the-software
+
 Python binding for ZeroMQ - www.zeromq.org/bindings:python
 
 ## Quick start
