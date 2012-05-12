@@ -131,6 +131,5 @@ By default the server keeps unacknowledged messages in memory so if the server c
 
 Note that there is currently no way of limiting the number of saved messages so it is possible to fill all available memory if you are not careful.
 
-Hmm
 
 
