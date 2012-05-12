@@ -20,7 +20,7 @@ class Message:
         self.payload = payload
         self.ack = ack
         self.timestamp = time.time()
-        self.checksum = checksum or self.getChecksum()
+        self.checksum = checksum or self.get_checksum()
 
     def __getitem__(self, key):
         return getattr(self, key)
@@ -29,16 +29,16 @@ class Message:
         return '\n%s\nName: %s\nAck: %s\nChecksum: %s\nPayload: %s\n%s\n' % ('='*10, self.name, self.ack,
                                                                        self.checksum, self.payload, '='*10)
 
-    def getChecksum(self):
+    def get_checksum(self):
         return hashlib.md5('%s%s%s' % (self.name, self.payload, self.timestamp)).hexdigest()
 
     def serialize(self):
         return '%s|%s' % (self.name, cPickle.dumps(self.__dict__))
 
 
-def parse(pickledMsg):
+def parse(pickled_msg):
     """ Parse given message, returning Message-object
     """
-    _, pickledMsg = pickledMsg.split('|', 1)
-    s = cPickle.loads(pickledMsg)
+    _, pickled_msg = pickled_msg.split('|', 1)
+    s = cPickle.loads(pickled_msg)
     return Message(s['name'], s['payload'], s.get('checksum', ''), s['ack'])
