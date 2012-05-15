@@ -52,6 +52,7 @@ class Mezzenger(threading.Thread):
         self.msg_send_socket = None
         self.connect()
         self._stop = threading.Event()
+        self.send_lock = threading.RLock()
         self.msg_map = {}
         self.channels = set()
         if auto_start:
@@ -158,7 +159,9 @@ class Mezzenger(threading.Thread):
         - ack: If > 0, server will make sure at least one client receives message
 
         """
+        self.send_lock.acquire()
         ret = self._send(msg_name, payload, ack)
+        self.send_lock.release()
         if not ret:
             raise MezzengerException('Could not send message to server')
         
